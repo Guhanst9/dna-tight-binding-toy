@@ -11,3 +11,16 @@ def print_basis(orbitals):
 def print_matrix(matrix):
     print("hamiltonian:")
     print(np.array2string(matrix, precision=3, suppress_small=True))
+
+
+def print_contact_setup(contact_setup):
+    print("left contact indices:")
+    print(contact_setup["left_contact"])
+    print("right contact indices:")
+    print(contact_setup["right_contact"])
+    print("buttiker probe indices:")
+    print(contact_setup["probe_indices"])
+    print("sigma_l:")
+    print(np.array2string(contact_setup["sigma_left"], precision=3, suppress_small=True))
+    print("sigma_r:")
+    print(np.array2string(contact_setup["sigma_right"], precision=3, suppress_small=True))
