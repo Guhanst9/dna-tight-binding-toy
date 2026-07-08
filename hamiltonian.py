@@ -1,5 +1,7 @@
 import argparse
 
+import numpy as np
+
 mev_to_ev = 1e-3
 table = {
     "G": {"e_h": -4278.0, "e_l": 1137.0, "t_l": 19.0, "t_h": -115.0},
@@ -42,15 +44,10 @@ def build_hamiltonian(sequence, band):
         raise ValueError(f"unknown base(s): {', '.join(unknown_bases)}")
 
     size = len(sequence)
-    hamiltonian = []
-    for _ in range(size):
-        row = []
-        for _ in range(size):
-            row.append(0.0)
-        hamiltonian.append(row)
+    hamiltonian = np.zeros((size, size))
 
     for index, base in enumerate(sequence):
-        hamiltonian[index][index] = onsite(base, band)
+        hamiltonian[index, index] = onsite(base, band)
 
     for index in range(size - 1):
         left = sequence[index]
@@ -61,17 +58,13 @@ def build_hamiltonian(sequence, band):
                 f"missing {left}-{right} hopping"
             )
         value = hopping(left, band)
-        hamiltonian[index][index + 1] = value
-        hamiltonian[index + 1][index] = value
+        hamiltonian[index, index + 1] = value
+        hamiltonian[index + 1, index] = value
 
     return hamiltonian
 
 def print_matrix(matrix):
-    print("[")
-    for row in matrix:
-        values = ", ".join(f"{value: .3f}" for value in row)
-        print(f"  [{values}],")
-    print("]")
+    print(np.array2string(matrix, precision=3, suppress_small=True))
 
 def main():
     args = parse_args()
