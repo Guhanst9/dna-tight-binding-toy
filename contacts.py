@@ -33,6 +33,9 @@ def build_contact_self_energy(size, contact_indices, gamma):
     return self_energy
 
 def build_contact_setup(orbitals, base_pair_count, gamma_left, gamma_right):
+    if base_pair_count < 2:
+        raise ValueError("base pair count must be at least 2 for contacts")
+
     left_contact, right_contact = get_contact_indices(orbitals, base_pair_count)
     probe_indices = get_probe_indices(orbitals, base_pair_count)
     size = len(orbitals)

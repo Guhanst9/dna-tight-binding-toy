@@ -24,3 +24,12 @@ def print_contact_setup(contact_setup):
     print(np.array2string(contact_setup["sigma_left"], precision=3, suppress_small=True))
     print("sigma_r:")
     print(np.array2string(contact_setup["sigma_right"], precision=3, suppress_small=True))
+
+def print_coherent_results(results):
+    print("coherent calculation:")
+    print(f"dos: {results['dos']:.8f}")
+    print(f"t_lr: {results['t_lr']:.8e}")
+
+def print_ldos(results):
+    print("ldos:")
+    print(np.array2string(results["ldos"], precision=8, suppress_small=True))

@@ -2,7 +2,14 @@ import argparse
 
 from builder import build_hamiltonian
 from contacts import build_contact_setup
-from printing import print_basis, print_contact_setup, print_matrix
+from greens import run_coherent_calculation
+from printing import (
+    print_basis,
+    print_coherent_results,
+    print_contact_setup,
+    print_ldos,
+    print_matrix,
+)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -11,8 +18,10 @@ def parse_args():
     parser.add_argument("--base-pairs", type=int, default=10)
     parser.add_argument("--gamma-left", type=float, default=0.5)
     parser.add_argument("--gamma-right", type=float, default=0.5)
+    parser.add_argument("--energy", type=float, required=True)
     parser.add_argument("--show-basis", action="store_true")
     parser.add_argument("--show-contacts", action="store_true")
+    parser.add_argument("--show-ldos", action="store_true")
     return parser.parse_args()
 
 def main():
@@ -30,6 +39,11 @@ def main():
             gamma_left=args.gamma_left,
             gamma_right=args.gamma_right,
         )
+        coherent_results = run_coherent_calculation(
+            hamiltonian=matrix,
+            contact_setup=contact_setup,
+            energy=args.energy,
+        )
     except ValueError as error:
         raise SystemExit(f"error: {error}")
 
@@ -40,6 +54,11 @@ def main():
 
     if args.show_contacts:
         print_contact_setup(contact_setup)
+
+    print_coherent_results(coherent_results)
+
+    if args.show_ldos:
+        print_ldos(coherent_results)
 
 if __name__ == "__main__":
     main()
