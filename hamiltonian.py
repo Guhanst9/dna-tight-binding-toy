@@ -9,12 +9,10 @@ from printing import (
     print_contact_setup,
     print_ldos,
     print_matrix,
+    print_solver_results,
     print_transport_results,
 )
-from transport import (
-    build_empty_decoherence_self_energy,
-    run_transport_calculation,
-)
+from solver import run_self_consistent_solver
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -24,6 +22,10 @@ def parse_args():
     parser.add_argument("--gamma-left", type=float, default=0.5)
     parser.add_argument("--gamma-right", type=float, default=0.5)
     parser.add_argument("--energy", type=float, required=True)
+    parser.add_argument("--d0", type=float, default=0.01)
+    parser.add_argument("--tolerance", type=float, default=0.1)
+    parser.add_argument("--max-iterations", type=int, default=100)
+    parser.add_argument("--mixing", type=float, default=0.5)
     parser.add_argument("--show-basis", action="store_true")
     parser.add_argument("--show-contacts", action="store_true")
     parser.add_argument("--show-ldos", action="store_true")
@@ -50,11 +52,14 @@ def main():
             contact_setup=contact_setup,
             energy=args.energy,
         )
-        sigma_decoherence = build_empty_decoherence_self_energy(matrix.shape[0])
-        transport_results = run_transport_calculation(
-            green_function=coherent_results["green_function"],
+        solver_results = run_self_consistent_solver(
+            hamiltonian=matrix,
             contact_setup=contact_setup,
-            sigma_decoherence=sigma_decoherence,
+            energy=args.energy,
+            d0=args.d0,
+            tolerance=args.tolerance,
+            max_iterations=args.max_iterations,
+            mixing=args.mixing,
         )
     except ValueError as error:
         raise SystemExit(f"error: {error}")
@@ -68,12 +73,13 @@ def main():
         print_contact_setup(contact_setup)
 
     print_coherent_results(coherent_results)
+    print_solver_results(solver_results)
 
     if args.show_ldos:
-        print_ldos(coherent_results)
+        print_ldos(solver_results)
 
     if args.show_transport:
-        print_transport_results(transport_results)
+        print_transport_results(solver_results["transport_results"])
 
 if __name__ == "__main__":
     main()

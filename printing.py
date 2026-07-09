@@ -44,3 +44,23 @@ def print_transport_results(results):
         print(results["active_probe_indices"])
         print("active probe gammas:")
         print(np.array2string(np.array(results["active_probe_gammas"]), precision=8))
+
+def print_solver_results(results):
+    print("self-consistent solver:")
+    print(f"converged: {results['converged']}")
+    print(f"iterations: {results['iterations']}")
+    print(f"dos: {results['dos']:.8f}")
+    print(f"t_lr: {results['t_lr']:.8e}")
+    print(f"t_eff: {results['t_eff']:.8e}")
+
+    if results["dos_change_percent"] is not None:
+        print(f"dos change percent: {results['dos_change_percent']:.8f}")
+
+    if results["transmission_change_percent"] is not None:
+        print(
+            "transmission change percent: "
+            f"{results['transmission_change_percent']:.8f}"
+        )
+
+    active_gammas = results["transport_results"]["active_probe_gammas"]
+    print(f"active probe count: {len(active_gammas)}")
