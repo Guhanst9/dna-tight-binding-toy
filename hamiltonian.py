@@ -7,6 +7,7 @@ from printing import (
     print_basis,
     print_coherent_results,
     print_contact_setup,
+    print_inputs,
     print_ldos,
     print_matrix,
     print_solver_results,
@@ -25,7 +26,7 @@ def parse_args():
     parser.add_argument("--d0", type=float, default=0.01)
     parser.add_argument("--tolerance", type=float, default=0.1)
     parser.add_argument("--max-iterations", type=int, default=100)
-    parser.add_argument("--mixing", type=float, default=0.5)
+    parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--show-basis", action="store_true")
     parser.add_argument("--show-contacts", action="store_true")
     parser.add_argument("--show-ldos", action="store_true")
@@ -59,7 +60,7 @@ def main():
             d0=args.d0,
             tolerance=args.tolerance,
             max_iterations=args.max_iterations,
-            mixing=args.mixing,
+            alpha=args.alpha,
         )
     except ValueError as error:
         raise SystemExit(f"error: {error}")
@@ -68,17 +69,24 @@ def main():
         print_basis(orbitals)
 
     print_matrix(matrix)
+    print()
+    print_inputs(args)
+    print()
 
     if args.show_contacts:
         print_contact_setup(contact_setup)
+        print()
 
     print_coherent_results(coherent_results)
+    print()
     print_solver_results(solver_results)
 
     if args.show_ldos:
+        print()
         print_ldos(solver_results)
 
     if args.show_transport:
+        print()
         print_transport_results(solver_results["transport_results"])
 
 if __name__ == "__main__":

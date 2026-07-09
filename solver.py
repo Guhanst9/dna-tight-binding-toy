@@ -6,7 +6,7 @@ from transport import (
     run_transport_calculation,
 )
 
-def validate_solver_settings(d0, tolerance, max_iterations, mixing):
+def validate_solver_settings(d0, tolerance, max_iterations, alpha):
     if d0 < 0:
         raise ValueError("d0 must be nonnegative")
 
@@ -16,11 +16,11 @@ def validate_solver_settings(d0, tolerance, max_iterations, mixing):
     if max_iterations < 1:
         raise ValueError("max iterations must be at least 1")
 
-    if mixing < 0:
-        raise ValueError("mixing must be between 0 and 1")
+    if alpha < 0:
+        raise ValueError("alpha must be between 0 and 1")
 
-    if mixing > 1:
-        raise ValueError("mixing must be between 0 and 1")
+    if alpha > 1:
+        raise ValueError("alpha must be between 0 and 1")
 
 def build_decoherence_self_energy(green_function, probe_indices, d0):
     size = green_function.shape[0]
@@ -31,8 +31,8 @@ def build_decoherence_self_energy(green_function, probe_indices, d0):
 
     return sigma_decoherence
 
-def mix_self_energy(candidate, previous, mixing):
-    return mixing * candidate + (1 - mixing) * previous
+def mix_self_energy(candidate, previous_candidate, alpha):
+    return alpha * candidate + (1 - alpha) * previous_candidate
 
 def calculate_percent_change(current, previous):
     scale = abs(previous)
@@ -86,12 +86,13 @@ def run_self_consistent_solver(
     d0,
     tolerance,
     max_iterations,
-    mixing,
+    alpha,
 ):
-    validate_solver_settings(d0, tolerance, max_iterations, mixing)
+    validate_solver_settings(d0, tolerance, max_iterations, alpha)
 
     size = hamiltonian.shape[0]
     sigma_current = build_empty_decoherence_self_energy(size)
+    previous_candidate_sigma = build_empty_decoherence_self_energy(size)
     previous_dos = None
     previous_t_eff = None
     final_results = None
@@ -151,14 +152,11 @@ def run_self_consistent_solver(
             contact_setup["probe_indices"],
             d0,
         )
-
-        if iteration == 1:
-            sigma_next = candidate_sigma
-        else:
-            sigma_next = mix_self_energy(candidate_sigma, sigma_current, mixing)
+        sigma_next = mix_self_energy(candidate_sigma, previous_candidate_sigma, alpha)
 
         previous_dos = dos
         previous_t_eff = transport_results["t_eff"]
+        previous_candidate_sigma = candidate_sigma
         sigma_current = sigma_next
 
     return final_results
