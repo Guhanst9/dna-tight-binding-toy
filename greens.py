@@ -1,14 +1,24 @@
 import numpy as np
 
-def solve_green_function(hamiltonian, energy, sigma_left, sigma_right):
+def solve_green_function(
+    hamiltonian,
+    energy,
+    sigma_left,
+    sigma_right,
+    sigma_decoherence=None,
+):
     size = hamiltonian.shape[0]
     identity = np.eye(size, dtype=complex)
+
+    if sigma_decoherence is None:
+        sigma_decoherence = np.zeros((size, size), dtype=complex)
 
     matrix_to_invert = (
         energy * identity
         - hamiltonian
         - sigma_left
         - sigma_right
+        - sigma_decoherence
     )
 
     try:

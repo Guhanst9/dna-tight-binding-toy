@@ -9,6 +9,11 @@ from printing import (
     print_contact_setup,
     print_ldos,
     print_matrix,
+    print_transport_results,
+)
+from transport import (
+    build_empty_decoherence_self_energy,
+    run_transport_calculation,
 )
 
 def parse_args():
@@ -22,6 +27,7 @@ def parse_args():
     parser.add_argument("--show-basis", action="store_true")
     parser.add_argument("--show-contacts", action="store_true")
     parser.add_argument("--show-ldos", action="store_true")
+    parser.add_argument("--show-transport", action="store_true")
     return parser.parse_args()
 
 def main():
@@ -44,6 +50,12 @@ def main():
             contact_setup=contact_setup,
             energy=args.energy,
         )
+        sigma_decoherence = build_empty_decoherence_self_energy(matrix.shape[0])
+        transport_results = run_transport_calculation(
+            green_function=coherent_results["green_function"],
+            contact_setup=contact_setup,
+            sigma_decoherence=sigma_decoherence,
+        )
     except ValueError as error:
         raise SystemExit(f"error: {error}")
 
@@ -59,6 +71,9 @@ def main():
 
     if args.show_ldos:
         print_ldos(coherent_results)
+
+    if args.show_transport:
+        print_transport_results(transport_results)
 
 if __name__ == "__main__":
     main()

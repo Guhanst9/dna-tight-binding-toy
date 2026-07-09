@@ -33,3 +33,14 @@ def print_coherent_results(results):
 def print_ldos(results):
     print("ldos:")
     print(np.array2string(results["ldos"], precision=8, suppress_small=True))
+
+def print_transport_results(results):
+    print("transport calculation:")
+    print(f"active probe count: {len(results['active_probe_indices'])}")
+    print(f"t_eff: {results['t_eff']:.8e}")
+
+    if len(results["active_probe_indices"]) > 0:
+        print("active probe indices:")
+        print(results["active_probe_indices"])
+        print("active probe gammas:")
+        print(np.array2string(np.array(results["active_probe_gammas"]), precision=8))
