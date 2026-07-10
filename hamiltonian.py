@@ -1,9 +1,9 @@
 import argparse
 
-from builder import build_hamiltonian
-from contacts import build_contact_setup
-from greens import run_coherent_calculation
-from printing import (
+from src.builder import build_hamiltonian
+from src.contacts import build_contact_setup
+from src.greens import run_coherent_calculation
+from src.printing import (
     print_basis,
     print_coherent_results,
     print_contact_setup,
@@ -13,7 +13,7 @@ from printing import (
     print_solver_results,
     print_transport_results,
 )
-from solver import run_self_consistent_solver
+from src.solver import run_self_consistent_solver
 
 def parse_args():
     parser = argparse.ArgumentParser()

@@ -1,6 +1,6 @@
 import numpy as np
 
-from greens import calculate_broadening, calculate_direct_transmission
+from .greens import calculate_broadening, calculate_direct_transmission
 
 minimum_probe_gamma = 1e-14
 

@@ -1,7 +1,7 @@
 import numpy as np
 
-from basis import build_basis
-from parameters import (
+from .basis import build_basis
+from .parameters import (
     get_nearest_cross_hopping,
     get_onsite,
     get_strand_hopping,

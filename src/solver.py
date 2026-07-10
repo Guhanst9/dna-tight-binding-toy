@@ -1,7 +1,7 @@
 import numpy as np
 
-from greens import calculate_dos, calculate_ldos, solve_green_function
-from transport import (
+from .greens import calculate_dos, calculate_ldos, solve_green_function
+from .transport import (
     build_empty_decoherence_self_energy,
     run_transport_calculation,
 )

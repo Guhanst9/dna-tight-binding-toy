@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from parameters import get_base_pair
+from .parameters import get_base_pair
 
 @dataclass(frozen=True)
 class Orbital:
