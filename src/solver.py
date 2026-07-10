@@ -64,6 +64,7 @@ def package_solver_results(
     transport_results,
     dos_change,
     transmission_change,
+    history,
 ):
     return {
         "converged": converged,
@@ -77,6 +78,23 @@ def package_solver_results(
         "t_eff": transport_results["t_eff"],
         "dos_change_percent": dos_change,
         "transmission_change_percent": transmission_change,
+        "history": history,
+    }
+
+def build_history_row(iteration, dos, transport_results, dos_change, transmission_change):
+    probe_gammas = []
+
+    for gamma in transport_results["probe_gammas"]:
+        probe_gammas.append(gamma)
+
+    return {
+        "iteration": iteration,
+        "dos": dos,
+        "t_lr": transport_results["t_lr"],
+        "t_eff": transport_results["t_eff"],
+        "dos_change_percent": dos_change,
+        "transmission_change_percent": transmission_change,
+        "probe_gammas": probe_gammas,
     }
 
 def run_self_consistent_solver(
@@ -96,6 +114,7 @@ def run_self_consistent_solver(
     previous_dos = None
     previous_t_eff = None
     final_results = None
+    history = []
 
     for iteration in range(1, max_iterations + 1):
         green_function = solve_green_function(
@@ -123,6 +142,16 @@ def run_self_consistent_solver(
                 previous_t_eff,
             )
 
+        history_row = build_history_row(
+            iteration,
+            dos,
+            transport_results,
+            dos_change,
+            transmission_change,
+        )
+        history.append(history_row)
+
+        if previous_dos is not None:
             if is_converged(dos_change, transmission_change, tolerance):
                 return package_solver_results(
                     True,
@@ -134,6 +163,7 @@ def run_self_consistent_solver(
                     transport_results,
                     dos_change,
                     transmission_change,
+                    history,
                 )
 
         final_results = package_solver_results(
@@ -146,6 +176,7 @@ def run_self_consistent_solver(
             transport_results,
             dos_change,
             transmission_change,
+            history,
         )
         candidate_sigma = build_decoherence_self_energy(
             green_function,

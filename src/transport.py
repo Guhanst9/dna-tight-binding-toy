@@ -13,6 +13,9 @@ def calculate_probe_gamma_values(sigma_decoherence, probe_indices):
     for index in probe_indices:
         gamma_value = -2 * np.imag(sigma_decoherence[index, index])
 
+        if gamma_value == 0:
+            gamma_value = 0.0
+
         if gamma_value < 0 and abs(gamma_value) < 1e-12:
             gamma_value = 0.0
 
