@@ -14,6 +14,12 @@ from diagnostics.csv_writer import (
     write_gamma_by_residue,
     write_transmission_sweep,
 )
+from diagnostics.plotting import (
+    plot_coherent_transmission,
+    plot_decoherent_transmission,
+    plot_gamma_by_iteration,
+    plot_gamma_by_residue,
+)
 
 from src.builder import build_hamiltonian
 from src.contacts import build_contact_setup
@@ -91,6 +97,10 @@ def main():
     transmission_path = output_dir / "transmission_vs_energy.csv"
     gamma_iteration_path = output_dir / "gamma_by_iteration.csv"
     gamma_residue_path = output_dir / "gamma_by_residue.csv"
+    coherent_plot_path = output_dir / "transmission_coherent.png"
+    decoherent_plot_path = output_dir / "transmission_decoherent.png"
+    gamma_iteration_plot_path = output_dir / "gamma_by_iteration.png"
+    gamma_residue_plot_path = output_dir / "gamma_by_residue.png"
 
     write_eigenvalues(eigenvalues_path, eigenvalues)
     write_transmission_sweep(transmission_path, transmission_rows)
@@ -102,10 +112,24 @@ def main():
     )
     write_gamma_by_residue(gamma_residue_path, gamma_rows)
 
+    plot_coherent_transmission(coherent_plot_path, transmission_rows)
+    plot_decoherent_transmission(decoherent_plot_path, transmission_rows)
+    plot_gamma_by_iteration(
+        gamma_iteration_plot_path,
+        orbitals,
+        contact_setup["probe_indices"],
+        trace_results["history"],
+    )
+    plot_gamma_by_residue(gamma_residue_plot_path, gamma_rows)
+
     print_written_file(eigenvalues_path)
     print_written_file(transmission_path)
     print_written_file(gamma_iteration_path)
     print_written_file(gamma_residue_path)
+    print_written_file(coherent_plot_path)
+    print_written_file(decoherent_plot_path)
+    print_written_file(gamma_iteration_plot_path)
+    print_written_file(gamma_residue_plot_path)
 
 if __name__ == "__main__":
     main()
