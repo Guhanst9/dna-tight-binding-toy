@@ -18,12 +18,6 @@ Generate diagnostics:
 python3 report.py --pair gc --band homo --base-pairs 10 --gamma-left 0.5 --gamma-right 0.5 --d0 0.01 --tolerance 0.1 --max-iterations 100 --alpha 0.5 --energy-min -7 --energy-max 2 --energy-points 1000 --trace-energy -4.3 --output-dir outputs/gc_homo
 ```
 
-Run tests:
-
-```bash
-python3 -m pytest
-```
-
 ## inputs
 
 `--pair`
