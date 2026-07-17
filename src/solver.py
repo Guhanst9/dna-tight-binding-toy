@@ -22,12 +22,22 @@ def validate_solver_settings(d0, tolerance, max_iterations, alpha):
     if alpha > 1:
         raise ValueError("alpha must be between 0 and 1")
 
+def calculate_decoherence_imaginary_part(green_sum, d0):
+    return d0 / (2 * np.pi) * np.imag(green_sum)
+
+def calculate_decoherence_real_part(green_sum, d0):
+    # eq. 24 avoids doing the full-energy hilbert transform.
+    return d0 / (2 * np.pi) * np.real(green_sum)
+
 def build_decoherence_self_energy(green_function, probe_indices, d0):
     size = green_function.shape[0]
     sigma_decoherence = build_empty_decoherence_self_energy(size)
 
     for index in probe_indices:
-        sigma_decoherence[index, index] = d0 / (2 * np.pi) * green_function[index, index]
+        green_sum = green_function[index, index]
+        real_part = calculate_decoherence_real_part(green_sum, d0)
+        imaginary_part = calculate_decoherence_imaginary_part(green_sum, d0)
+        sigma_decoherence[index, index] = real_part + 1j * imaginary_part
 
     return sigma_decoherence
 
