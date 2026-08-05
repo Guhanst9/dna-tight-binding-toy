@@ -1,9 +1,16 @@
 import argparse
 
 from src.energy_solver import ConvergenceError
-from src.energy_sweep import SweepConfig, run_energy_sweep, validate_sweep_config
+from src.energy_sweep import (
+    SweepConfig,
+    build_energy_grid,
+    run_energy_sweep,
+    validate_index_range,
+    validate_sweep_config,
+)
 from src.model_data import load_model
 from src.transport_setup import build_transport_setup
+from tqdm import tqdm
 
 
 def build_parser():
@@ -32,17 +39,6 @@ def build_parser():
     )
     parser.add_argument("--output-dir", required=True)
     return parser
-
-
-def print_progress(status, energy_index, energy, elapsed_seconds):
-    if status == "skipped":
-        print(f"skipped {energy_index}: {energy:.2f} eV")
-        return
-
-    print(
-        f"completed {energy_index}: {energy:.2f} eV "
-        f"in {elapsed_seconds:.2f} seconds"
-    )
 
 
 def main():
@@ -75,16 +71,43 @@ def main():
             energy_maximum=args.energy_max,
             energy_step=args.energy_step,
         )
-        summary = run_energy_sweep(
-            model,
-            setup,
-            config,
-            args.output_dir,
-            start_index=args.start_index,
-            stop_index=args.stop_index,
-            history_indices=tuple(args.save_history_index),
-            progress_callback=print_progress,
+        energies = build_energy_grid(
+            args.energy_min,
+            args.energy_max,
+            args.energy_step,
         )
+        stop_index = args.stop_index
+
+        if stop_index is None:
+            stop_index = len(energies)
+
+        validate_index_range(
+            args.start_index,
+            stop_index,
+            len(energies),
+        )
+        progress_total = stop_index - args.start_index
+
+        with tqdm(
+            total=progress_total,
+            desc="Transport",
+            unit="point",
+            dynamic_ncols=True,
+        ) as progress_bar:
+            def update_progress(status, energy_index, energy, elapsed_seconds):
+                progress_bar.set_postfix_str(f"E={energy:.2f} eV")
+                progress_bar.update(1)
+
+            summary = run_energy_sweep(
+                model,
+                setup,
+                config,
+                args.output_dir,
+                start_index=args.start_index,
+                stop_index=stop_index,
+                history_indices=tuple(args.save_history_index),
+                progress_callback=update_progress,
+            )
     except (ValueError, ConvergenceError) as error:
         parser.error(str(error))
 

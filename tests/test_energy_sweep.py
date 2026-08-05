@@ -377,6 +377,21 @@ def test_cli_runs_one_coherent_energy(tmp_path, repo_root):
     )
 
     assert result.returncode == 0
-    assert "completed 0: -1.00 eV" in result.stdout
+    assert "Transport:" in result.stderr
+    assert "100%" in result.stderr
+    assert "E=-1.00 eV" in result.stderr
     assert "processed: 1" in result.stdout
     assert (output_path / "checkpoints" / "energy_000000.json").exists()
+
+    resumed_result = subprocess.run(
+        command,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert resumed_result.returncode == 0
+    assert "100%" in resumed_result.stderr
+    assert "processed: 0" in resumed_result.stdout
+    assert "skipped: 1" in resumed_result.stdout
