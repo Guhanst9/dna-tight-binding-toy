@@ -6,3 +6,5 @@ __pycache__/
 *.csv
 outputs/
 data/xx7tg6.mat
+data/*.mat
+data/**/*.mat
