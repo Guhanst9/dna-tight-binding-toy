@@ -139,15 +139,26 @@ def build_run_settings(model, setup, config):
     partition_ranges = []
 
     for partition in setup.partitions:
-        partition_ranges.append(
-            {
-                "partition_id": partition.partition_id,
-                "orbital_start": partition.orbital_start,
-                "orbital_stop": partition.orbital_stop,
-            }
-        )
+        values = {
+            "partition_id": partition.partition_id,
+            "orbital_start": partition.orbital_start,
+            "orbital_stop": partition.orbital_stop,
+        }
 
-    return {
+        if model.partition_scheme != "pdb":
+            values["source_partition_ids"] = list(
+                partition.source_partition_ids
+            )
+            values["orbital_ranges"] = []
+
+            for orbital_start, orbital_stop in partition.orbital_ranges:
+                values["orbital_ranges"].append(
+                    [orbital_start, orbital_stop]
+                )
+
+        partition_ranges.append(values)
+
+    settings = {
         "mode": config.mode,
         "variable_name": model.variable_name,
         "hamiltonian_size": model.hamiltonian.shape[0],
@@ -163,6 +174,11 @@ def build_run_settings(model, setup, config):
         "alpha": config.alpha,
         "max_iterations": config.max_iterations,
     }
+
+    if model.partition_scheme != "pdb":
+        settings["partition_scheme"] = model.partition_scheme
+
+    return settings
 
 
 def write_json(path, values):

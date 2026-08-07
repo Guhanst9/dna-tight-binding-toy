@@ -1,4 +1,5 @@
 import csv
+from dataclasses import replace
 import json
 from pathlib import Path
 import subprocess
@@ -12,6 +13,7 @@ from src.energy_solver import ConvergenceError
 from src.energy_sweep import (
     SweepConfig,
     build_energy_grid,
+    build_run_settings,
     run_energy_sweep,
     validate_sweep_config,
 )
@@ -242,6 +244,89 @@ def test_different_settings_cannot_resume_same_output(tmp_path):
         )
 
 
+def test_pdb_run_settings_keep_the_old_partition_format():
+    model, setup, config = build_sweep_values()
+    settings = build_run_settings(model, setup, config)
+
+    assert "partition_scheme" not in settings
+
+    for partition in settings["partition_ranges"]:
+        assert set(partition) == {
+            "partition_id",
+            "orbital_start",
+            "orbital_stop",
+        }
+
+
+def test_grouped_run_settings_store_exact_orbital_ranges(interleaved_model):
+    grouped_model = replace(interleaved_model, partition_scheme="base-pair")
+    setup = build_transport_setup(
+        grouped_model,
+        left_partition_id=1,
+        right_partition_id=3,
+        energy_minimum=-1.0,
+        energy_maximum=1.0,
+        energy_step=0.5,
+    )
+    config = SweepConfig(
+        mode="coherent",
+        energy_minimum=-1.0,
+        energy_maximum=1.0,
+        energy_step=0.5,
+        d0=None,
+        alpha=None,
+        max_iterations=None,
+    )
+    settings = build_run_settings(grouped_model, setup, config)
+
+    assert settings["partition_scheme"] == "base-pair"
+    assert settings["partition_ranges"][0]["source_partition_ids"] == [1, 4]
+    assert settings["partition_ranges"][0]["orbital_ranges"] == [
+        [0, 1],
+        [3, 4],
+    ]
+
+
+def test_partition_scheme_change_cannot_resume_same_output(
+    tmp_path,
+    interleaved_model,
+):
+    setup = build_transport_setup(
+        interleaved_model,
+        left_partition_id=1,
+        right_partition_id=3,
+        energy_minimum=-1.0,
+        energy_maximum=1.0,
+        energy_step=0.5,
+    )
+    config = SweepConfig(
+        mode="coherent",
+        energy_minimum=-1.0,
+        energy_maximum=1.0,
+        energy_step=0.5,
+        d0=None,
+        alpha=None,
+        max_iterations=None,
+    )
+    run_energy_sweep(
+        interleaved_model,
+        setup,
+        config,
+        tmp_path,
+        stop_index=1,
+    )
+    grouped_model = replace(interleaved_model, partition_scheme="base-pair")
+
+    with pytest.raises(ValueError, match="different run settings"):
+        run_energy_sweep(
+            grouped_model,
+            setup,
+            config,
+            tmp_path,
+            stop_index=1,
+        )
+
+
 def test_decoherent_sweep_requires_solver_settings():
     config = SweepConfig(
         mode="decoherent",
@@ -395,3 +480,73 @@ def test_cli_runs_one_coherent_energy(tmp_path, repo_root):
     assert "100%" in resumed_result.stderr
     assert "processed: 0" in resumed_result.stdout
     assert "skipped: 1" in resumed_result.stdout
+
+
+def test_cli_runs_base_pair_partitioning(tmp_path, repo_root):
+    pdb_path = tmp_path / "base_pair.pdb"
+    mat_path = tmp_path / "base_pair.mat"
+    output_path = tmp_path / "base_pair_output"
+    atom_specs = []
+
+    for partition_id in range(1, 15):
+        atom_specs.append((partition_id, "H1", "DA", partition_id))
+
+    atom_specs.append((15, "HG", "HG", 15))
+    write_pdb(pdb_path, atom_specs)
+    write_mat(mat_path, "base_pair", np.eye(90))
+    command = [
+        sys.executable,
+        "run_transport.py",
+        "--pdb",
+        str(pdb_path),
+        "--hamiltonian",
+        str(mat_path),
+        "--variable",
+        "base_pair",
+        "--mode",
+        "coherent",
+        "--partition-scheme",
+        "base-pair",
+        "--energy-min",
+        "-1",
+        "--energy-max",
+        "1",
+        "--energy-step",
+        "1",
+        "--start-index",
+        "0",
+        "--stop-index",
+        "1",
+        "--output-dir",
+        str(output_path),
+    ]
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+
+    with (output_path / "run_config.json").open(
+        "r",
+        encoding="utf-8",
+    ) as input_file:
+        settings = json.load(input_file)
+
+    with (output_path / "checkpoints" / "energy_000000.json").open(
+        "r",
+        encoding="utf-8",
+    ) as input_file:
+        checkpoint = json.load(input_file)
+
+    assert settings["partition_scheme"] == "base-pair"
+    assert len(settings["partition_ranges"]) == 7
+    assert settings["partition_ranges"][3]["source_partition_ids"] == [
+        4,
+        11,
+        15,
+    ]
+    assert len(checkpoint["partitions"]) == 7

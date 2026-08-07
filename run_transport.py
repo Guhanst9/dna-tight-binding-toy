@@ -19,6 +19,16 @@ def build_parser():
     parser.add_argument("--hamiltonian", required=True)
     parser.add_argument("--variable", required=True)
     parser.add_argument("--mode", choices=["coherent", "decoherent"], required=True)
+    parser.add_argument(
+        "--partition-scheme",
+        choices=[
+            "pdb",
+            "metals-single",
+            "metals-separate",
+            "base-pair",
+        ],
+        default="pdb",
+    )
     parser.add_argument("--left-partition", type=int, default=1)
     parser.add_argument("--right-partition", type=int, default=7)
     parser.add_argument("--gamma-left", type=float, default=1.0)
@@ -60,6 +70,8 @@ def main():
             args.pdb,
             args.hamiltonian,
             args.variable,
+            require_final_hg=False,
+            partition_scheme=args.partition_scheme,
         )
         setup = build_transport_setup(
             model,
