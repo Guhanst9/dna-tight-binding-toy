@@ -55,6 +55,26 @@ def test_default_energy_grid(small_model_files):
     assert setup.energy_grid.step == 0.01
 
 
+def test_contacts_use_only_their_split_orbital_ranges(interleaved_model):
+    setup = build_transport_setup(
+        interleaved_model,
+        left_partition_id=1,
+        right_partition_id=3,
+        gamma_left=0.4,
+        gamma_right=0.8,
+    )
+
+    assert np.array_equal(
+        setup.sigma_left_diagonal,
+        [-0.2j, 0.0j, 0.0j, -0.2j],
+    )
+    assert np.array_equal(
+        setup.sigma_right_diagonal,
+        [0.0j, 0.0j, -0.4j, 0.0j],
+    )
+    assert np.array_equal(setup.probe_mask, [False, True, False])
+
+
 def test_real_model_uses_confirmed_contacts_and_thirteen_probes(repo_root):
     pdb_path = repo_root / "data" / "xx7tg6.pdb"
     mat_path = repo_root / "data" / "xx7tg6.mat"
@@ -195,7 +215,10 @@ def test_partition_ranges_must_cover_the_hamiltonian(small_model_files):
         "small",
         expected_partition_count=3,
     )
-    bad_partition = replace(model.partitions[1], orbital_start=6)
+    bad_partition = replace(
+        model.partitions[1],
+        orbital_ranges=((6, 20),),
+    )
     bad_partitions = list(model.partitions)
     bad_partitions[1] = bad_partition
     bad_model = replace(model, partitions=tuple(bad_partitions))

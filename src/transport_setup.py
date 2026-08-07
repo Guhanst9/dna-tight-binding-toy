@@ -57,8 +57,9 @@ def validate_partition_coverage(model):
     if len(model.partitions) < 2:
         raise ValueError("at least two partitions are required")
 
-    expected_start = 0
     partition_ids = set()
+    orbital_ranges = []
+    hamiltonian_size = model.hamiltonian.shape[0]
 
     for partition in model.partitions:
         if partition.partition_id in partition_ids:
@@ -66,15 +67,26 @@ def validate_partition_coverage(model):
 
         partition_ids.add(partition.partition_id)
 
-        if partition.orbital_start != expected_start:
-            raise ValueError("partition orbital ranges have a gap or overlap")
-
-        if partition.orbital_stop <= partition.orbital_start:
+        if len(partition.orbital_ranges) == 0:
             raise ValueError("partition orbital ranges must not be empty")
 
-        expected_start = partition.orbital_stop
+        for orbital_start, orbital_stop in partition.orbital_ranges:
+            if orbital_start < 0 or orbital_stop > hamiltonian_size:
+                raise ValueError("partition orbital range is out of bounds")
 
-    hamiltonian_size = model.hamiltonian.shape[0]
+            if orbital_stop <= orbital_start:
+                raise ValueError("partition orbital ranges must not be empty")
+
+            orbital_ranges.append((orbital_start, orbital_stop))
+
+    orbital_ranges.sort()
+    expected_start = 0
+
+    for orbital_start, orbital_stop in orbital_ranges:
+        if orbital_start != expected_start:
+            raise ValueError("partition orbital ranges have a gap or overlap")
+
+        expected_start = orbital_stop
 
     if expected_start != hamiltonian_size:
         raise ValueError(
@@ -94,11 +106,9 @@ def build_contact_diagonal(size, partition, gamma):
     self_energy = np.zeros(size, dtype=complex)
     value = -1j * gamma / 2
 
-    for orbital_index in range(
-        partition.orbital_start,
-        partition.orbital_stop,
-    ):
-        self_energy[orbital_index] = value
+    for orbital_start, orbital_stop in partition.orbital_ranges:
+        for orbital_index in range(orbital_start, orbital_stop):
+            self_energy[orbital_index] = value
 
     return self_energy
 

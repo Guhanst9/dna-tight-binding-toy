@@ -6,6 +6,7 @@ import pytest
 from src.energy_solver import (
     CONVERGENCE_PERCENT,
     ConvergenceError,
+    build_decoherence_diagonal,
     build_w_matrix,
     calculate_effective_transmission,
     calculate_next_self_energy,
@@ -95,6 +96,55 @@ def test_partition_ldos_uses_diagonal_green_entries():
     assert np.allclose(green_sums, [1.0 - 2.0j, 2.0 - 4.0j, 3.0 - 6.0j])
     assert np.allclose(partition_ldos, [2.0 / np.pi, 4.0 / np.pi, 6.0 / np.pi])
     assert dos == pytest.approx(12.0 / np.pi)
+
+
+def test_split_partition_ldos_uses_only_owned_orbitals(interleaved_model):
+    setup = build_transport_setup(
+        interleaved_model,
+        left_partition_id=1,
+        right_partition_id=3,
+    )
+    green_function = np.diag([-1.0j, -2.0j, -3.0j, -4.0j])
+    green_sums, partition_ldos, dos = calculate_partition_values(
+        green_function,
+        setup,
+    )
+
+    assert green_sums[0] == pytest.approx(-5.0j)
+    assert np.allclose(partition_ldos, [5.0 / np.pi, 2.0 / np.pi, 3.0 / np.pi])
+    assert dos == pytest.approx(10.0 / np.pi)
+
+
+def test_split_partition_decoherence_uses_only_probe_orbitals(
+    interleaved_model,
+):
+    setup = build_transport_setup(
+        interleaved_model,
+        left_partition_id=1,
+        right_partition_id=3,
+    )
+    sigma_by_partition = np.array([0.0j, -0.05j, 0.0j])
+    diagonal = build_decoherence_diagonal(setup, sigma_by_partition)
+
+    assert np.array_equal(diagonal, [0.0j, -0.05j, 0.0j, 0.0j])
+
+
+def test_split_partition_transmission_uses_only_owned_blocks(
+    interleaved_model,
+):
+    green_function = np.zeros((4, 4), dtype=complex)
+    green_function[0, 2] = 1.0
+    green_function[3, 2] = 2.0j
+    green_function[1, 2] = 100.0
+    transmission = calculate_region_transmission(
+        green_function,
+        interleaved_model.partitions[0],
+        2.0,
+        interleaved_model.partitions[2],
+        3.0,
+    )
+
+    assert transmission == pytest.approx(30.0)
 
 
 def test_first_eq_37_update_uses_zero_for_g0():

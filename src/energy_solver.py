@@ -111,11 +111,9 @@ def build_decoherence_diagonal(setup, sigma_by_partition):
 
             continue
 
-        for orbital_index in range(
-            partition.orbital_start,
-            partition.orbital_stop,
-        ):
-            diagonal[orbital_index] = value
+        for orbital_start, orbital_stop in partition.orbital_ranges:
+            for orbital_index in range(orbital_start, orbital_stop):
+                diagonal[orbital_index] = value
 
     return diagonal
 
@@ -160,9 +158,11 @@ def calculate_partition_values(green_function, setup):
 
     for partition_index in range(partition_count):
         partition = setup.partitions[partition_index]
-        value = np.sum(
-            diagonal[partition.orbital_start:partition.orbital_stop]
-        )
+        value = 0.0j
+
+        for orbital_start, orbital_stop in partition.orbital_ranges:
+            value = value + np.sum(diagonal[orbital_start:orbital_stop])
+
         ldos = -np.imag(value) / np.pi
 
         if ldos < -NEGATIVE_TOLERANCE:
@@ -227,11 +227,17 @@ def calculate_region_transmission(
     if first_gamma < 0 or second_gamma < 0:
         raise ValueError("region broadening must be nonnegative")
 
-    green_block = green_function[
-        first_partition.orbital_start:first_partition.orbital_stop,
-        second_partition.orbital_start:second_partition.orbital_stop,
-    ]
-    transmission = first_gamma * second_gamma * np.sum(np.abs(green_block) ** 2)
+    block_sum = 0.0
+
+    for first_start, first_stop in first_partition.orbital_ranges:
+        for second_start, second_stop in second_partition.orbital_ranges:
+            green_block = green_function[
+                first_start:first_stop,
+                second_start:second_stop,
+            ]
+            block_sum = block_sum + np.sum(np.abs(green_block) ** 2)
+
+    transmission = first_gamma * second_gamma * block_sum
     transmission = float(np.real(transmission))
 
     if not np.isfinite(transmission):
