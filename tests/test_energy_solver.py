@@ -147,6 +147,106 @@ def test_split_partition_transmission_uses_only_owned_blocks(
     assert transmission == pytest.approx(30.0)
 
 
+def test_split_and_contiguous_orbital_orders_give_the_same_results(
+    interleaved_model,
+):
+    contiguous_order = [0, 3, 1, 2]
+    contiguous_hamiltonian = interleaved_model.hamiltonian[
+        np.ix_(contiguous_order, contiguous_order)
+    ]
+    contiguous_partitions = (
+        ModelPartition(
+            partition_id=1,
+            residue_names=("L1", "L2"),
+            atom_start=1,
+            atom_stop=2,
+            atom_count=2,
+            element_counts=(("H", 2),),
+            orbital_start=0,
+            orbital_stop=2,
+        ),
+        ModelPartition(
+            partition_id=2,
+            residue_names=("P",),
+            atom_start=3,
+            atom_stop=3,
+            atom_count=1,
+            element_counts=(("H", 1),),
+            orbital_start=2,
+            orbital_stop=3,
+        ),
+        ModelPartition(
+            partition_id=3,
+            residue_names=("R",),
+            atom_start=4,
+            atom_stop=4,
+            atom_count=1,
+            element_counts=(("H", 1),),
+            orbital_start=3,
+            orbital_stop=4,
+        ),
+    )
+    contiguous_model = LoadedModel(
+        hamiltonian=contiguous_hamiltonian,
+        atoms=tuple(),
+        atom_blocks=tuple(),
+        partitions=contiguous_partitions,
+        variable_name="contiguous",
+        max_hermitian_error=0.0,
+    )
+    split_setup = build_transport_setup(
+        interleaved_model,
+        left_partition_id=1,
+        right_partition_id=3,
+    )
+    contiguous_setup = build_transport_setup(
+        contiguous_model,
+        left_partition_id=1,
+        right_partition_id=3,
+    )
+    split_coherent = run_coherent_energy(
+        interleaved_model,
+        split_setup,
+        0.5,
+    )
+    contiguous_coherent = run_coherent_energy(
+        contiguous_model,
+        contiguous_setup,
+        0.5,
+    )
+    split_decoherent = run_dos_weighted_energy(
+        interleaved_model,
+        split_setup,
+        energy=0.5,
+        d0=0.01,
+        alpha=0.3,
+        max_iterations=100,
+    )
+    contiguous_decoherent = run_dos_weighted_energy(
+        contiguous_model,
+        contiguous_setup,
+        energy=0.5,
+        d0=0.01,
+        alpha=0.3,
+        max_iterations=100,
+    )
+
+    assert np.allclose(
+        split_coherent.partition_ldos,
+        contiguous_coherent.partition_ldos,
+    )
+    assert split_coherent.dos == pytest.approx(contiguous_coherent.dos)
+    assert split_coherent.t_lr == pytest.approx(contiguous_coherent.t_lr)
+    assert split_decoherent.iterations == contiguous_decoherent.iterations
+    assert split_decoherent.dos == pytest.approx(contiguous_decoherent.dos)
+    assert split_decoherent.t_lr == pytest.approx(contiguous_decoherent.t_lr)
+    assert split_decoherent.t_eff == pytest.approx(contiguous_decoherent.t_eff)
+    assert np.allclose(
+        split_decoherent.gamma_decoherence_by_partition,
+        contiguous_decoherent.gamma_decoherence_by_partition,
+    )
+
+
 def test_first_eq_37_update_uses_zero_for_g0():
     model, setup = build_three_site_setup()
     current = np.array([1.0 - 2.0j, 2.0 - 4.0j, 3.0 - 6.0j])

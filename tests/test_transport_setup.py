@@ -76,8 +76,8 @@ def test_contacts_use_only_their_split_orbital_ranges(interleaved_model):
 
 
 def test_real_model_uses_confirmed_contacts_and_thirteen_probes(repo_root):
-    pdb_path = repo_root / "data" / "xx7tg6.pdb"
-    mat_path = repo_root / "data" / "xx7tg6.mat"
+    pdb_path = repo_root / "data" / "xx7tg6" / "xx7tg6.pdb"
+    mat_path = repo_root / "data" / "xx7tg6" / "xx7tg6.mat"
 
     if not mat_path.exists():
         pytest.skip("local real Hamiltonian is not available")
@@ -229,3 +229,83 @@ def test_partition_ranges_must_cover_the_hamiltonian(small_model_files):
             left_partition_id=1,
             right_partition_id=3,
         )
+
+
+@pytest.mark.parametrize(
+    "bad_ranges,error_message",
+    [
+        (((1, 1),), "must not be empty"),
+        (((-1, 2),), "out of bounds"),
+        (((1, 5),), "out of bounds"),
+        (((0, 2),), "gap or overlap"),
+        (((2, 3),), "gap or overlap"),
+    ],
+)
+def test_invalid_split_partition_ranges_are_rejected(
+    interleaved_model,
+    bad_ranges,
+    error_message,
+):
+    bad_probe = replace(
+        interleaved_model.partitions[1],
+        orbital_ranges=bad_ranges,
+    )
+    partitions = list(interleaved_model.partitions)
+    partitions[1] = bad_probe
+    bad_model = replace(interleaved_model, partitions=tuple(partitions))
+
+    with pytest.raises(ValueError, match=error_message):
+        build_transport_setup(
+            bad_model,
+            left_partition_id=1,
+            right_partition_id=3,
+        )
+
+
+@pytest.mark.parametrize(
+    "strand,hamiltonian_size,hg_source_ids,hg_orbital_count",
+    [
+        ("xx7tg6", 5083, (4, 11, 15), 748),
+        ("xx7sm0", 5103, (4, 11, 15, 16), 768),
+    ],
+)
+def test_real_base_pair_setup_uses_complete_terminal_contacts(
+    repo_root,
+    strand,
+    hamiltonian_size,
+    hg_source_ids,
+    hg_orbital_count,
+):
+    pdb_path = repo_root / "data" / strand / f"{strand}.pdb"
+    mat_path = repo_root / "data" / strand / f"{strand}.mat"
+
+    if not mat_path.exists():
+        pytest.skip(f"local {strand} Hamiltonian is not available")
+
+    model = load_model(
+        pdb_path,
+        mat_path,
+        strand,
+        require_final_hg=False,
+        partition_scheme="base-pair",
+    )
+    setup = build_transport_setup(model)
+
+    assert model.hamiltonian.shape == (hamiltonian_size, hamiltonian_size)
+    assert len(setup.partitions) == 7
+    assert setup.left_partition.source_partition_ids == (1, 14)
+    assert setup.right_partition.source_partition_ids == (7, 8)
+    assert setup.partitions[3].source_partition_ids == hg_source_ids
+    assert setup.partitions[3].orbital_count == hg_orbital_count
+    assert len(setup.probe_partitions) == 5
+    assert int(np.count_nonzero(setup.probe_mask)) == 5
+    assert np.count_nonzero(setup.sigma_left_diagonal) == 699
+    assert np.count_nonzero(setup.sigma_right_diagonal) == 694
+
+    expected_probe_ids = [2, 3, 4, 5, 6]
+    actual_probe_ids = []
+
+    for partition in setup.probe_partitions:
+        actual_probe_ids.append(partition.partition_id)
+
+    assert actual_probe_ids == expected_probe_ids
