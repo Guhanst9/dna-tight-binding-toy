@@ -50,5 +50,6 @@ def test_inspection_command_prints_and_exports_partition_table(
 
     lines = output_path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 16
+    assert "source_partition_ids" in lines[0]
     assert "python_orbital_start" in lines[0]
     assert "one_based_orbital_end" in lines[0]

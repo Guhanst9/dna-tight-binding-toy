@@ -50,10 +50,40 @@ class ModelPartition:
     element_counts: tuple
     orbital_start: int
     orbital_stop: int
+    atom_ranges: tuple = ()
+    orbital_ranges: tuple = ()
+    source_partition_ids: tuple = ()
+
+    def __post_init__(self):
+        if len(self.atom_ranges) == 0:
+            object.__setattr__(
+                self,
+                "atom_ranges",
+                ((self.atom_start, self.atom_stop),),
+            )
+
+        if len(self.orbital_ranges) == 0:
+            object.__setattr__(
+                self,
+                "orbital_ranges",
+                ((self.orbital_start, self.orbital_stop),),
+            )
+
+        if len(self.source_partition_ids) == 0:
+            object.__setattr__(
+                self,
+                "source_partition_ids",
+                (self.partition_id,),
+            )
 
     @property
     def orbital_count(self):
-        return self.orbital_stop - self.orbital_start
+        total = 0
+
+        for orbital_start, orbital_stop in self.orbital_ranges:
+            total = total + orbital_stop - orbital_start
+
+        return total
 
 
 @dataclass(frozen=True)
@@ -64,6 +94,7 @@ class LoadedModel:
     partitions: tuple
     variable_name: str
     max_hermitian_error: float
+    partition_scheme: str = "pdb"
 
 
 def infer_element(atom_name, residue_name):
@@ -98,7 +129,10 @@ def parse_pdb(path):
         for line_number, line in enumerate(pdb_file, start=1):
             fields = line.split()
 
-            if len(fields) == 0 or fields[0] != "ATOM":
+            if len(fields) == 0:
+                continue
+
+            if fields[0] != "ATOM" and fields[0] != "HETATM":
                 continue
 
             if len(fields) < 5:
@@ -203,6 +237,97 @@ def validate_final_hg(atoms, expected_partition_count):
         raise ModelValidationError("Hg must be its own partition")
 
 
+def find_hg_partition_ids(atoms):
+    partition_ids = []
+
+    for atom in atoms:
+        if atom.element != "Hg":
+            continue
+
+        if atom.partition_id not in partition_ids:
+            partition_ids.append(atom.partition_id)
+
+    if len(partition_ids) == 0:
+        raise ModelValidationError("the model must contain at least one Hg atom")
+
+    return tuple(partition_ids)
+
+
+def validate_hg_partitions_are_separate(atoms):
+    hg_partition_ids = find_hg_partition_ids(atoms)
+
+    for partition_id in hg_partition_ids:
+        atoms_in_partition = []
+
+        for atom in atoms:
+            if atom.partition_id == partition_id:
+                atoms_in_partition.append(atom)
+
+        if len(atoms_in_partition) != 1:
+            raise ModelValidationError(
+                f"Hg partition {partition_id} is not a single atom"
+            )
+
+        if atoms_in_partition[0].element != "Hg":
+            raise ModelValidationError(
+                f"partition {partition_id} is not an Hg partition"
+            )
+
+
+def build_partition_groups(atoms, expected_partition_count, partition_scheme):
+    pdb_groups = []
+
+    for partition_id in range(1, expected_partition_count + 1):
+        pdb_groups.append((partition_id,))
+
+    if partition_scheme == "pdb":
+        return tuple(pdb_groups)
+
+    hg_partition_ids = find_hg_partition_ids(atoms)
+    validate_hg_partitions_are_separate(atoms)
+
+    if partition_scheme == "metals-separate":
+        return tuple(pdb_groups)
+
+    dna_partition_ids = []
+
+    for partition_id in range(1, expected_partition_count + 1):
+        if partition_id not in hg_partition_ids:
+            dna_partition_ids.append(partition_id)
+
+    if partition_scheme == "metals-single":
+        groups = []
+
+        for partition_id in dna_partition_ids:
+            groups.append((partition_id,))
+
+        groups.append(hg_partition_ids)
+        return tuple(groups)
+
+    if partition_scheme == "base-pair":
+        if len(dna_partition_ids) != 14:
+            raise ModelValidationError(
+                "base-pair partitioning expects 14 DNA base partitions"
+            )
+
+        groups = []
+
+        for base_pair_index in range(7):
+            left_partition_id = base_pair_index + 1
+            right_partition_id = 14 - base_pair_index
+            group = [left_partition_id, right_partition_id]
+
+            if base_pair_index == 3:
+                for hg_partition_id in hg_partition_ids:
+                    group.append(hg_partition_id)
+
+            groups.append(tuple(group))
+
+        return tuple(groups)
+
+    raise ModelValidationError(f"unknown partition scheme {partition_scheme}")
+
+
 def build_atom_blocks(atoms):
     atom_blocks = []
     orbital_start = 0
@@ -221,19 +346,60 @@ def build_atom_blocks(atoms):
     return tuple(atom_blocks)
 
 
-def build_partitions(atom_blocks, expected_partition_count):
+def build_ranges_from_blocks(selected_blocks):
+    atom_ranges = []
+    orbital_ranges = []
+
+    atom_start = selected_blocks[0].atom.serial
+    atom_stop = selected_blocks[0].atom.serial
+    orbital_start = selected_blocks[0].orbital_start
+    orbital_stop = selected_blocks[0].orbital_stop
+
+    for block in selected_blocks[1:]:
+        next_atom = block.atom.serial
+
+        if next_atom == atom_stop + 1:
+            atom_stop = next_atom
+            orbital_stop = block.orbital_stop
+            continue
+
+        atom_ranges.append((atom_start, atom_stop))
+        orbital_ranges.append((orbital_start, orbital_stop))
+        atom_start = next_atom
+        atom_stop = next_atom
+        orbital_start = block.orbital_start
+        orbital_stop = block.orbital_stop
+
+    atom_ranges.append((atom_start, atom_stop))
+    orbital_ranges.append((orbital_start, orbital_stop))
+    return tuple(atom_ranges), tuple(orbital_ranges)
+
+
+def build_partitions_from_groups(atom_blocks, partition_groups):
     partitions = []
 
-    for partition_id in range(1, expected_partition_count + 1):
+    for group_index in range(len(partition_groups)):
+        partition_id = group_index + 1
+        source_partition_ids = partition_groups[group_index]
         selected_blocks = []
 
+        if len(source_partition_ids) == 0:
+            raise ModelValidationError(
+                f"partition group {partition_id} has no source partitions"
+            )
+
+        if len(set(source_partition_ids)) != len(source_partition_ids):
+            raise ModelValidationError(
+                f"partition group {partition_id} repeats a source partition"
+            )
+
         for block in atom_blocks:
-            if block.atom.partition_id == partition_id:
+            if block.atom.partition_id in source_partition_ids:
                 selected_blocks.append(block)
 
         if len(selected_blocks) == 0:
             raise ModelValidationError(
-                f"partition {partition_id} contains no atoms"
+                f"partition group {partition_id} contains no atoms"
             )
 
         residue_names = []
@@ -258,6 +424,7 @@ def build_partitions(atom_blocks, expected_partition_count):
             if element in element_counts:
                 ordered_counts.append((element, element_counts[element]))
 
+        atom_ranges, orbital_ranges = build_ranges_from_blocks(selected_blocks)
         partition = ModelPartition(
             partition_id=partition_id,
             residue_names=tuple(residue_names),
@@ -267,6 +434,9 @@ def build_partitions(atom_blocks, expected_partition_count):
             element_counts=tuple(ordered_counts),
             orbital_start=selected_blocks[0].orbital_start,
             orbital_stop=selected_blocks[-1].orbital_stop,
+            atom_ranges=atom_ranges,
+            orbital_ranges=orbital_ranges,
+            source_partition_ids=source_partition_ids,
         )
         partitions.append(partition)
 
@@ -274,7 +444,22 @@ def build_partitions(atom_blocks, expected_partition_count):
     return tuple(partitions)
 
 
+def build_partitions(atom_blocks, expected_partition_count):
+    partition_groups = []
+
+    for partition_id in range(1, expected_partition_count + 1):
+        partition_groups.append((partition_id,))
+
+    return build_partitions_from_groups(atom_blocks, tuple(partition_groups))
+
+
 def validate_orbital_ranges(atom_blocks, partitions):
+    if len(atom_blocks) == 0:
+        raise ModelValidationError("the model must contain at least one atom")
+
+    if len(partitions) == 0:
+        raise ModelValidationError("the model must contain at least one partition")
+
     expected_start = 0
 
     for block in atom_blocks:
@@ -283,17 +468,41 @@ def validate_orbital_ranges(atom_blocks, partitions):
 
         expected_start = block.orbital_stop
 
-    expected_start = 0
+    ranges = []
+    final_orbital = atom_blocks[-1].orbital_stop
 
     for partition in partitions:
-        if partition.orbital_start != expected_start:
+        if len(partition.orbital_ranges) == 0:
+            raise ModelValidationError(
+                f"partition {partition.partition_id} has no orbital ranges"
+            )
+
+        for orbital_range in partition.orbital_ranges:
+            if len(orbital_range) != 2:
+                raise ModelValidationError("orbital ranges must have two values")
+
+            orbital_start, orbital_stop = orbital_range
+
+            if orbital_start < 0 or orbital_stop > final_orbital:
+                raise ModelValidationError("partition orbital range is out of bounds")
+
+            if orbital_stop <= orbital_start:
+                raise ModelValidationError("partition orbital ranges must not be empty")
+
+            ranges.append((orbital_start, orbital_stop))
+
+    ranges.sort()
+    expected_start = 0
+
+    for orbital_start, orbital_stop in ranges:
+        if orbital_start != expected_start:
             raise ModelValidationError(
                 "partition orbital ranges have a gap or overlap"
             )
 
-        expected_start = partition.orbital_stop
+        expected_start = orbital_stop
 
-    if partitions[-1].orbital_stop != atom_blocks[-1].orbital_stop:
+    if expected_start != final_orbital:
         raise ModelValidationError(
             "the final partition does not end at the final atom orbital"
         )
@@ -372,21 +581,35 @@ def load_model(
     pdb_path,
     hamiltonian_path,
     variable_name,
-    expected_partition_count=15,
+    expected_partition_count=None,
     hermitian_tolerance=1e-7,
     require_final_hg=True,
+    partition_scheme="pdb",
 ):
+    atoms = parse_pdb(pdb_path)
+
+    if expected_partition_count is None:
+        expected_partition_count = 0
+
+        for atom in atoms:
+            if atom.partition_id > expected_partition_count:
+                expected_partition_count = atom.partition_id
+
     if expected_partition_count < 1:
         raise ModelValidationError("expected partition count must be positive")
 
-    atoms = parse_pdb(pdb_path)
     validate_partition_order(atoms, expected_partition_count)
 
     if require_final_hg:
         validate_final_hg(atoms, expected_partition_count)
 
     atom_blocks = build_atom_blocks(atoms)
-    partitions = build_partitions(atom_blocks, expected_partition_count)
+    partition_groups = build_partition_groups(
+        atoms,
+        expected_partition_count,
+        partition_scheme,
+    )
+    partitions = build_partitions_from_groups(atom_blocks, partition_groups)
     hamiltonian = load_hamiltonian(hamiltonian_path, variable_name)
     orbital_count = atom_blocks[-1].orbital_stop
 
@@ -404,9 +627,14 @@ def load_model(
             f"{max_hermitian_error:.6e} > {hermitian_tolerance:.6e}"
         )
 
-    if partitions[-1].orbital_stop != hamiltonian.shape[0]:
+    covered_orbitals = 0
+
+    for partition in partitions:
+        covered_orbitals = covered_orbitals + partition.orbital_count
+
+    if covered_orbitals != hamiltonian.shape[0]:
         raise ModelValidationError(
-            "the final partition does not end at the final Hamiltonian orbital"
+            "partition orbitals do not cover the full Hamiltonian"
         )
 
     return LoadedModel(
@@ -416,6 +644,7 @@ def load_model(
         partitions=partitions,
         variable_name=variable_name,
         max_hermitian_error=max_hermitian_error,
+        partition_scheme=partition_scheme,
     )
 
 

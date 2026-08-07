@@ -267,8 +267,8 @@ def test_loader_rejects_nonhermitian_hamiltonian(tmp_path):
 
 
 def test_real_model_matches_audited_dimensions(repo_root):
-    pdb_path = repo_root / "data" / "xx7tg6.pdb"
-    mat_path = repo_root / "data" / "xx7tg6.mat"
+    pdb_path = repo_root / "data" / "xx7tg6" / "xx7tg6.pdb"
+    mat_path = repo_root / "data" / "xx7tg6" / "xx7tg6.mat"
 
     if not mat_path.exists():
         pytest.skip("local real Hamiltonian is not available")
@@ -283,7 +283,7 @@ def test_real_model_matches_audited_dimensions(repo_root):
 
 
 def test_real_pdb_partition_orbital_counts(repo_root):
-    pdb_path = Path(repo_root) / "data" / "xx7tg6.pdb"
+    pdb_path = Path(repo_root) / "data" / "xx7tg6" / "xx7tg6.pdb"
     atoms = parse_pdb(pdb_path)
     counts = {}
 
@@ -318,3 +318,118 @@ def test_real_pdb_partition_orbital_counts(repo_root):
         assert counts[partition_id] == expected[partition_index]
 
     assert sum(expected) == 5083
+
+
+def test_two_hg_strand_partition_schemes_match_hamiltonian(repo_root):
+    pdb_path = repo_root / "data" / "xx7sm0" / "xx7sm0.pdb"
+    mat_path = repo_root / "data" / "xx7sm0" / "xx7sm0.mat"
+
+    if not mat_path.exists():
+        pytest.skip("local xx7sm0 Hamiltonian is not available")
+
+    separate = load_model(
+        pdb_path,
+        mat_path,
+        "xx7sm0",
+        require_final_hg=False,
+        partition_scheme="metals-separate",
+    )
+    metals_single = load_model(
+        pdb_path,
+        mat_path,
+        "xx7sm0",
+        require_final_hg=False,
+        partition_scheme="metals-single",
+    )
+    base_pair = load_model(
+        pdb_path,
+        mat_path,
+        "xx7sm0",
+        require_final_hg=False,
+        partition_scheme="base-pair",
+    )
+
+    assert separate.hamiltonian.shape == (5103, 5103)
+    assert len(separate.atoms) == 445
+    assert len(separate.partitions) == 16
+    assert separate.partitions[-2].orbital_count == 20
+    assert separate.partitions[-1].orbital_count == 20
+
+    assert len(metals_single.partitions) == 15
+    assert metals_single.partitions[-1].orbital_count == 40
+
+    assert len(base_pair.partitions) == 7
+    assert base_pair.partitions[3].orbital_count == 768
+    assert base_pair.partitions[3].element_counts[-1] == ("Hg", 2)
+    assert sum(partition.orbital_count for partition in base_pair.partitions) == 5103
+
+
+def test_real_base_pair_partition_mappings(repo_root):
+    expected_source_ids = [
+        (1, 14),
+        (2, 13),
+        (3, 12),
+        (4, 11, 15),
+        (5, 10),
+        (6, 9),
+        (7, 8),
+    ]
+    expected_ranges = [
+        ((0, 320), (4684, 5063)),
+        ((320, 709), (4340, 4684)),
+        ((709, 1073), (3966, 4340)),
+        ((1073, 1437), (3602, 3966), (5063, 5083)),
+        ((1437, 1801), (3228, 3602)),
+        ((1801, 2190), (2884, 3228)),
+        ((2190, 2884),),
+    ]
+    pdb_path = repo_root / "data" / "xx7tg6" / "xx7tg6.pdb"
+    mat_path = repo_root / "data" / "xx7tg6" / "xx7tg6.mat"
+
+    if not mat_path.exists():
+        pytest.skip("local xx7tg6 Hamiltonian is not available")
+
+    model = load_model(
+        pdb_path,
+        mat_path,
+        "xx7tg6",
+        require_final_hg=False,
+        partition_scheme="base-pair",
+    )
+
+    assert model.partition_scheme == "base-pair"
+    assert len(model.partitions) == 7
+
+    for index in range(7):
+        partition = model.partitions[index]
+        assert partition.source_partition_ids == expected_source_ids[index]
+        assert partition.orbital_ranges == expected_ranges[index]
+
+    assert model.partitions[3].orbital_count == 748
+    assert sum(partition.orbital_count for partition in model.partitions) == 5083
+
+
+def test_two_hg_base_pair_mapping_includes_both_metals(repo_root):
+    pdb_path = repo_root / "data" / "xx7sm0" / "xx7sm0.pdb"
+    mat_path = repo_root / "data" / "xx7sm0" / "xx7sm0.mat"
+
+    if not mat_path.exists():
+        pytest.skip("local xx7sm0 Hamiltonian is not available")
+
+    model = load_model(
+        pdb_path,
+        mat_path,
+        "xx7sm0",
+        require_final_hg=False,
+        partition_scheme="base-pair",
+    )
+    fourth_partition = model.partitions[3]
+
+    assert fourth_partition.source_partition_ids == (4, 11, 15, 16)
+    assert fourth_partition.orbital_ranges == (
+        (1073, 1437),
+        (3602, 3966),
+        (5063, 5103),
+    )
+    assert fourth_partition.orbital_count == 768
+    assert sum(partition.orbital_count for partition in model.partitions) == 5103
